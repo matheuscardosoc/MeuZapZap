@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=MeuZapZap
+Comment=WhatsApp para Linux com notificações nativas
+Exec=/opt/MeuZapZap/meuzapzap %U
+Icon=/opt/MeuZapZap/resources/app/assets/icon.png
+Type=Application
+Categories=Network;InstantMessaging;
+StartupWMClass=MeuZapZap
+MimeType=x-scheme-handler/whatsapp;
+StartupNotify=true
