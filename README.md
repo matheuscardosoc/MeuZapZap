@@ -41,6 +41,23 @@ Isso instalará o MeuZapZap no sistema e criará:
 - ✅ Comando `meuzapzap-autostart` para auto-inicialização
 - ✅ Script de desinstalação
 
+### Atualização da Aplicação
+
+```bash
+# 1. Baixe a versão mais recente do código
+git pull origin main
+
+# 2. Execute o atualizador (mantém configurações)
+./update.sh
+```
+
+**Vantagens da atualização:**
+- ✅ Mantém todas as configurações
+- ✅ Não perde auto-start configurado
+- ✅ Cria backup automático
+- ✅ Atualiza dependências
+- ✅ Reinicia aplicação automaticamente
+
 ### Desenvolvimento Manual
 
 #### 1. Clone ou configure o projeto
@@ -185,6 +202,9 @@ sudo update-desktop-database
    npm run watch-icons  # monitora mudanças nos SVGs
    ```
 3. **Se instalado no sistema**: `sudo /opt/MeuZapZap/convert-icons.sh`
+4. **Forçar atualização de ícones no sistema**: `./refresh-icons.sh`
+
+**💡 Dica**: Se os ícones não atualizarem no menu do sistema, faça logout/login ou execute `./refresh-icons.sh`
 
 ## 🔧 Desenvolvimento no VS Code
 
@@ -219,6 +239,7 @@ MeuZapZap/
 │   └── launch.json      # Configurações de debug
 ├── scripts/
 │   ├── install.sh       # Instalador para o sistema
+│   ├── update.sh        # Atualizador da aplicação
 │   ├── setup-autostart.sh     # Configurar auto-start (desenvolvimento)
 │   ├── convert-icons.sh       # Converter SVG para PNG
 │   └── check-dependencies.sh  # Verificar dependências do sistema
@@ -247,8 +268,10 @@ sudo /opt/MeuZapZap/uninstall.sh  # Desinstalar aplicação
 
 # Desenvolvimento local
 ./install.sh           # Instalar no sistema
+./update.sh            # Atualizar aplicação instalada
 ./setup-autostart.sh   # Auto-start para desenvolvimento
 ./check-dependencies.sh # Verificar dependências
+./refresh-icons.sh     # Forçar atualização de ícones do sistema
 ```
 
 ## 🛡️ Segurança e Privacidade
@@ -303,6 +326,22 @@ sudo apt install libappindicator3-1
 # Para outros sistemas, verifique a documentação específica
 ```
 
+### Ícones não atualizam no sistema
+
+```bash
+# 1. Reconverter ícones com transparência
+./convert-icons.sh
+
+# 2. Forçar atualização do cache do sistema
+./refresh-icons.sh
+
+# 3. Se ainda não funcionar
+sudo update-desktop-database
+sudo gtk-update-icon-cache -f /usr/share/icons/hicolor/
+
+# 4. Em último caso, fazer logout/login
+```
+
 ### Erro de build
 
 ```bash
@@ -320,6 +359,22 @@ npm run build:linux
 
 # Ou instale manualmente as dependências principais
 sudo apt install libnotify4 libappindicator3-1 libsecret-1-0 libnss3
+```
+
+### Problemas após atualização
+
+```bash
+# Se a aplicação não funcionar após atualização
+# 1. Verificar se está rodando
+ps aux | grep meuzapzap
+
+# 2. Reiniciar aplicação
+pkill -f meuzapzap
+meuzapzap
+
+# 3. Em último caso, reinstalar
+sudo /opt/MeuZapZap/uninstall.sh
+./install.sh
 ```
 
 ## 🤝 Contribuição

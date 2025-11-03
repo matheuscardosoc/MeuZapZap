@@ -118,3 +118,6 @@ start-meuzapzap.sh
 # Backup files
 *.backup
 *.bak
+
+# Manter todos os ícones PNG gerados
+!assets/*.png

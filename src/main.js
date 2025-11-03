@@ -43,6 +43,22 @@ class MeuZapZap {
       autoHideMenuBar: true
     });
 
+    // Definir ícones em múltiplas resoluções para melhor qualidade
+    const iconSizes = [16, 32, 48, 64, 128, 256];
+    const icons = iconSizes.map(size => {
+      const iconPath = path.join(__dirname, `../assets/icon-${size}.png`);
+      try {
+        const icon = nativeImage.createFromPath(iconPath);
+        return icon.isEmpty() ? null : icon;
+      } catch {
+        return null;
+      }
+    }).filter(Boolean);
+
+    if (icons.length > 0) {
+      this.mainWindow.setIcon(icons[icons.length - 1]); // Usar a maior resolução disponível
+    }
+
     // Carregar WhatsApp Web
     this.mainWindow.loadURL('https://web.whatsapp.com');
 
@@ -146,11 +162,34 @@ class MeuZapZap {
   }
 
   createTray() {
-    // Criar ícone da bandeja
-    const iconPath = path.join(__dirname, '../assets/tray-icon.png');
-    const trayIcon = nativeImage.createFromPath(iconPath);
+    // Detectar DPI/escala do sistema para escolher melhor resolução
+    const scaleFactor = require('electron').screen.getPrimaryDisplay().scaleFactor;
+    let traySize;
     
-    this.tray = new Tray(trayIcon.resize({ width: 16, height: 16 }));
+    if (scaleFactor >= 2) {
+      traySize = 32; // Alta resolução para displays HiDPI
+    } else if (scaleFactor >= 1.5) {
+      traySize = 24; // Resolução média
+    } else {
+      traySize = 16; // Resolução padrão
+    }
+    
+    // Criar ícone da bandeja com resolução apropriada
+    const iconPath = path.join(__dirname, `../assets/tray-icon-${traySize}.png`);
+    let trayIcon;
+    
+    try {
+      trayIcon = nativeImage.createFromPath(iconPath);
+      // Se o arquivo específico não existir, usar o padrão
+      if (trayIcon.isEmpty()) {
+        trayIcon = nativeImage.createFromPath(path.join(__dirname, '../assets/tray-icon.png'));
+      }
+    } catch (error) {
+      // Fallback para ícone padrão
+      trayIcon = nativeImage.createFromPath(path.join(__dirname, '../assets/tray-icon.png'));
+    }
+    
+    this.tray = new Tray(trayIcon);
     this.tray.setToolTip('MeuZapZap - WhatsApp');
     
     // Menu de contexto da bandeja
@@ -197,20 +236,45 @@ class MeuZapZap {
   updateTrayIcon() {
     if (!this.tray) return;
     
-    let iconName = 'tray-icon.png';
+    // Detectar melhor resolução para o ícone
+    const scaleFactor = require('electron').screen.getPrimaryDisplay().scaleFactor;
+    let traySize;
+    
+    if (scaleFactor >= 2) {
+      traySize = 32;
+    } else if (scaleFactor >= 1.5) {
+      traySize = 24;
+    } else {
+      traySize = 16;
+    }
+    
+    let iconName = `tray-icon-${traySize}.png`;
     let toolTip = 'MeuZapZap - WhatsApp';
     
     if (!this.isConnected) {
-      iconName = 'tray-icon-offline.png';
+      iconName = `tray-icon-offline-${traySize}.png`;
       toolTip = 'MeuZapZap - WhatsApp (Desconectado)';
     } else if (this.unreadCount > 0) {
-      iconName = 'tray-icon-unread.png';
+      iconName = `tray-icon-unread-${traySize}.png`;
       toolTip = `MeuZapZap - WhatsApp (${this.unreadCount} não lidas)`;
     }
     
     const iconPath = path.join(__dirname, '../assets', iconName);
-    const trayIcon = nativeImage.createFromPath(iconPath);
-    this.tray.setImage(trayIcon.resize({ width: 16, height: 16 }));
+    let trayIcon;
+    
+    try {
+      trayIcon = nativeImage.createFromPath(iconPath);
+      // Fallback se o arquivo específico não existir
+      if (trayIcon.isEmpty()) {
+        const fallbackName = iconName.replace(`-${traySize}`, '');
+        trayIcon = nativeImage.createFromPath(path.join(__dirname, '../assets', fallbackName));
+      }
+    } catch (error) {
+      // Usar ícone padrão como último recurso
+      trayIcon = nativeImage.createFromPath(path.join(__dirname, '../assets/tray-icon.png'));
+    }
+    
+    this.tray.setImage(trayIcon);
     this.tray.setToolTip(toolTip);
   }
 
