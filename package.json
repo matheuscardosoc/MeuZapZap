@@ -4,8 +4,8 @@
   "description": "WhatsApp Linux notification app with system tray integration",
   "main": "src/main.js",
   "scripts": {
-    "start": "electron .",
-    "dev": "electron . --dev",
+    "start": "electron . 2>&1 | grep -v 'platform_shared_memory_region_posix'",
+    "dev": "NODE_ENV=development electron . --dev 2>&1 | grep -v 'platform_shared_memory_region_posix'",
     "build": "electron-builder",
     "build:linux": "electron-builder --linux",
     "dist": "electron-builder --publish=never",
