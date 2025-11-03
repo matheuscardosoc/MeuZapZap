@@ -15,6 +15,32 @@ Uma aplicação WhatsApp para Linux com notificações nativas do sistema e inte
 - 📱 **Contador de Mensagens** - Exibe o número de mensagens não lidas na tooltip
 - 🖥️ **Integração Linux** - Funciona perfeitamente com desktop Linux
 - 🔄 **Minimizar para Bandeja** - A aplicação fica na bandeja quando fechada
+- ⚡ **Abertura Rápida de Conversas** - Abra a última conversa notificada instantaneamente
+  - **Atalho Global**: `Ctrl+Shift+L` - Funciona mesmo com a aplicação minimizada
+  - **Menu da Bandeja**: Clique direito → "Abrir última conversa"
+
+## 🎮 Como Usar as Notificações
+
+### 🔔 **Quando Receber uma Notificação:**
+
+**Método 1 - Atalho de Teclado (Recomendado)**
+```
+Pressione: Ctrl + Shift + L
+→ Abre automaticamente a conversa da última notificação
+```
+
+**Método 2 - Menu da Bandeja**
+```
+1. Clique direito no ícone da bandeja
+2. Clique em "Abrir última conversa (Nome da Pessoa)"
+→ Abre automaticamente a conversa específica
+```
+
+**Método 3 - Clique na Notificação (Pode não funcionar)**
+```
+Clicar diretamente na notificação pode não funcionar em alguns ambientes Linux
+Use os métodos 1 ou 2 como alternativa confiável
+```
 
 ## 📋 Pré-requisitos
 

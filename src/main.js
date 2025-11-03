@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, Notification, nativeImage, ipcMain } = require('electron');
+const { app, BrowserWindow, Tray, Menu, Notification, nativeImage, ipcMain, globalShortcut } = require('electron');
 const path = require('path');
 const notifier = require('node-notifier');
 
@@ -37,6 +37,8 @@ class MeuZapZap {
     this.isQuitting = false;
     this.unreadCount = 0;
     this.isConnected = false;
+    this.lastNotificationData = null; // Para armazenar dados da última notificação
+    this.lastNotificationChatName = null; // Nome da última conversa notificada
   }
 
   createWindow() {
@@ -153,6 +155,34 @@ class MeuZapZap {
             timestamp: Date.now()
           };
           
+          // Tentar capturar informações da conversa ativa para abertura direta
+          try {
+            // Buscar pelo elemento da conversa ativa ou mais recente
+            const chatListItems = document.querySelectorAll('[data-testid="cell-frame-container"]');
+            if (chatListItems.length > 0) {
+              // Pegar a primeira conversa (geralmente a mais recente/ativa)
+              const firstChat = chatListItems[0];
+              const chatInfo = firstChat.querySelector('[data-testid="cell-frame-title"]');
+              const chatName = chatInfo ? chatInfo.textContent.trim() : null;
+              
+              if (chatName) {
+                notificationData.chatName = chatName;
+                notificationData.chatElement = true;
+              }
+            }
+            
+            // Alternativa: buscar por conversa aberta/ativa
+            const activeChat = document.querySelector('[data-testid="conversation-header"]');
+            if (activeChat) {
+              const activeChatName = activeChat.querySelector('[data-testid="conversation-info-header-chat-title"]');
+              if (activeChatName) {
+                notificationData.activeChatName = activeChatName.textContent.trim();
+              }
+            }
+          } catch (error) {
+            // Se não conseguir capturar, continua normalmente
+          }
+          
           // Enviar dados da notificação para o processo principal
           window.electronAPI.sendNotification(notificationData);
           
@@ -226,6 +256,16 @@ class MeuZapZap {
         }
       },
       {
+        label: this.lastNotificationChatName ? `Abrir última conversa (${this.lastNotificationChatName})` : 'Abrir última conversa',
+        enabled: !!this.lastNotificationChatName,
+        click: () => {
+          if (this.lastNotificationChatName) {
+            this.openSpecificChat(this.lastNotificationChatName);
+          }
+        }
+      },
+      { type: 'separator' },
+      {
         label: 'Recarregar',
         click: () => {
           if (this.mainWindow) {
@@ -261,6 +301,53 @@ class MeuZapZap {
     });
     
     this.updateTrayIcon();
+  }
+
+  updateTrayMenu() {
+    if (!this.tray) return;
+    
+    // Recriar menu com a última conversa atualizada
+    const contextMenu = Menu.buildFromTemplate([
+      {
+        label: 'Abrir WhatsApp',
+        click: () => {
+          this.showWindow();
+        }
+      },
+      {
+        label: this.lastNotificationChatName ? `Abrir última conversa (${this.lastNotificationChatName})` : 'Abrir última conversa',
+        enabled: !!this.lastNotificationChatName,
+        click: () => {
+          if (this.lastNotificationChatName) {
+            this.openSpecificChat(this.lastNotificationChatName);
+          }
+        }
+      },
+      { type: 'separator' },
+      {
+        label: 'Recarregar',
+        click: () => {
+          if (this.mainWindow) {
+            this.mainWindow.reload();
+          }
+        }
+      },
+      { type: 'separator' },
+      {
+        label: 'Sobre',
+        click: () => {
+          this.showAbout();
+        }
+      },
+      {
+        label: 'Sair',
+        click: () => {
+          this.quit();
+        }
+      }
+    ]);
+    
+    this.tray.setContextMenu(contextMenu);
   }
 
   updateTrayIcon() {
@@ -326,6 +413,96 @@ class MeuZapZap {
       }
       this.mainWindow.show();
       this.mainWindow.focus();
+    }
+  }
+
+  async openSpecificChat(chatName) {
+    // Primeiro mostrar a janela
+    this.showWindow();
+    
+    // Aguardar um pouco para garantir que a janela esteja carregada
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    try {
+      // Executar JavaScript para buscar e abrir a conversa específica
+      const result = await this.mainWindow.webContents.executeJavaScript(`
+        (function() {
+          const chatName = "${chatName || ''}";
+          if (!chatName) return false;
+          
+          console.log('Procurando conversa:', chatName);
+          
+          // Múltiplos seletores para buscar as conversas
+          const selectors = [
+            '[data-testid="cell-frame-container"]',
+            '[data-testid="conversation-panel-body"] div[role="listitem"]',
+            'div[data-testid="chat"] div[role="gridcell"]',
+            'div[id="pane-side"] div[role="listitem"]'
+          ];
+          
+          for (const selector of selectors) {
+            const chatListItems = document.querySelectorAll(selector);
+            console.log('Tentando seletor:', selector, 'encontrados:', chatListItems.length);
+            
+            if (chatListItems.length > 0) {
+              for (const chatItem of chatListItems) {
+                // Múltiplos seletores para o título
+                const titleSelectors = [
+                  '[data-testid="cell-frame-title"]',
+                  'span[title]',
+                  'span[dir="auto"]',
+                  '.copyable-text',
+                  '[data-testid="conversation-info-header-chat-title"]'
+                ];
+                
+                let titleElement = null;
+                let titleText = '';
+                
+                for (const titleSelector of titleSelectors) {
+                  titleElement = chatItem.querySelector(titleSelector);
+                  if (titleElement) {
+                    titleText = titleElement.textContent.trim() || titleElement.getAttribute('title') || '';
+                    if (titleText) break;
+                  }
+                }
+                
+                if (titleText) {
+                  console.log('Verificando conversa:', titleText);
+                  
+                  // Comparação exata
+                  if (titleText === chatName) {
+                    console.log('Encontrou conversa exata, clicando...');
+                    chatItem.click();
+                    return true;
+                  }
+                  
+                  // Comparação parcial (case insensitive)
+                  const textLower = titleText.toLowerCase();
+                  const searchLower = chatName.toLowerCase();
+                  
+                  if (textLower.includes(searchLower) || searchLower.includes(textLower)) {
+                    console.log('Encontrou conversa com busca flexível, clicando...');
+                    chatItem.click();
+                    return true;
+                  }
+                }
+              }
+            }
+          }
+          
+          console.log('Conversa não encontrada');
+          return false;
+        })();
+      `);
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Resultado da busca da conversa:', result);
+      }
+    } catch (error) {
+      // Se não conseguir abrir a conversa específica, apenas mostrar a janela
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Erro ao abrir conversa específica:', error);
+      }
     }
   }
 
@@ -396,19 +573,29 @@ class MeuZapZap {
     // Limpar corpo da mensagem
     let cleanBody = data.body || 'Nova mensagem';
     
+    // Armazenar dados para quando a notificação for clicada
+    const chatName = data.chatName || data.activeChatName || cleanTitle;
+    
+    // Armazenar dados da última notificação para acesso via menu/atalho
+    this.lastNotificationChatName = chatName;
+    this.lastNotificationData = {
+      title: cleanTitle,
+      body: cleanBody,
+      chatName: chatName,
+      timestamp: new Date()
+    };
+    
+    // Atualizar menu da bandeja com a nova conversa
+    this.updateTrayMenu();
+    
+    // Enviar notificação simples (clique não funciona no Linux, mas mantemos para compatibilidade)
     notifier.notify({
       title: cleanTitle,
-      message: cleanBody,
+      message: `${cleanBody}\n\n💡 Pressione Ctrl+Shift+L para abrir esta conversa`,
       icon: notificationIcon,
       timeout: 5000,
       sound: true,
-      wait: false,
       subtitle: 'WhatsApp'
-    }, (err, response) => {
-      // Ao clicar na notificação, mostrar a janela
-      if (response === 'activate') {
-        this.showWindow();
-      }
     });
     
     // Log para debug apenas em desenvolvimento
@@ -416,8 +603,10 @@ class MeuZapZap {
       console.log('Notificação enviada:', {
         title: cleanTitle,
         body: cleanBody,
+        chatName: chatName,
         timestamp: new Date().toLocaleTimeString()
       });
+      console.log('💡 Use Ctrl+Shift+L ou menu da bandeja para abrir a conversa');
     }
   }
 
@@ -429,6 +618,25 @@ class MeuZapZap {
     app.whenReady().then(() => {
       this.createWindow();
       this.createTray();
+      
+      // Configurar atalho global para abrir última conversa notificada
+      try {
+        globalShortcut.register('Ctrl+Shift+L', () => {
+          if (this.lastNotificationChatName) {
+            this.openSpecificChat(this.lastNotificationChatName);
+          } else {
+            this.showWindow();
+          }
+        });
+        
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Atalho global Ctrl+Shift+L registrado para abrir última conversa');
+        }
+      } catch (error) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Erro ao registrar atalho global:', error);
+        }
+      }
       
       // Configurações específicas do Linux
       if (process.platform === 'linux') {
@@ -460,6 +668,11 @@ class MeuZapZap {
       if (BrowserWindow.getAllWindows().length === 0) {
         this.createWindow();
       }
+    });
+    
+    // Limpar atalhos globais antes de sair
+    app.on('will-quit', () => {
+      globalShortcut.unregisterAll();
     });
     
     // Definir identificador da aplicação para notificações
