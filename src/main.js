@@ -1,8 +1,6 @@
 const { app, BrowserWindow, Tray, Menu, Notification, nativeImage, ipcMain } = require('electron');
 const path = require('path');
 const notifier = require('node-notifier');
-const fs = require('fs');
-const crypto = require('crypto');
 
 // Suprimir logs de erro em produção
 if (process.env.NODE_ENV !== 'development') {
@@ -39,45 +37,6 @@ class MeuZapZap {
     this.isQuitting = false;
     this.unreadCount = 0;
     this.isConnected = false;
-    this.contactPhotos = new Map(); // Cache de fotos de contatos
-  }
-
-  async saveContactPhoto(photoData, contactName) {
-    try {
-      if (!photoData || (!photoData.startsWith('data:image') && !photoData.startsWith('blob:'))) {
-        return null;
-      }
-
-      // Criar diretório temporário se não existir
-      const tempDir = path.join(__dirname, '../temp');
-      if (!fs.existsSync(tempDir)) {
-        fs.mkdirSync(tempDir, { recursive: true });
-      }
-
-      // Gerar hash do nome do contato para nome do arquivo
-      const hash = crypto.createHash('md5').update(contactName || 'unknown').digest('hex');
-      const fileName = `contact-${hash}.png`;
-      const filePath = path.join(tempDir, fileName);
-
-      // Se for data:image, converter para buffer e salvar
-      if (photoData.startsWith('data:image')) {
-        const base64Data = photoData.replace(/^data:image\/[^;]+;base64,/, '');
-        const buffer = Buffer.from(base64Data, 'base64');
-        fs.writeFileSync(filePath, buffer);
-        
-        // Cachear o caminho da foto
-        this.contactPhotos.set(contactName, filePath);
-        return filePath;
-      }
-
-      return null;
-    } catch (error) {
-      // Log apenas em desenvolvimento
-      if (process.env.NODE_ENV === 'development') {
-        console.log('Erro ao salvar foto do contato:', error);
-      }
-      return null;
-    }
   }
 
   createWindow() {
@@ -193,37 +152,6 @@ class MeuZapZap {
             badge: options.badge || '',
             timestamp: Date.now()
           };
-          
-          // Tentar encontrar a foto do contato no DOM
-          try {
-            // Buscar por elementos de foto de perfil que podem estar relacionados
-            const avatars = document.querySelectorAll('img[src*="blob:"], img[src*="data:image"], [style*="background-image"]');
-            const recentAvatar = Array.from(avatars).find(img => {
-              const rect = img.getBoundingClientRect();
-              return rect.width > 0 && rect.height > 0 && (
-                img.src?.includes('blob:') || 
-                img.src?.includes('data:image') ||
-                img.style?.backgroundImage?.includes('blob:')
-              );
-            });
-            
-            if (recentAvatar) {
-              if (recentAvatar.src && (recentAvatar.src.includes('blob:') || recentAvatar.src.includes('data:image'))) {
-                notificationData.contactPhoto = recentAvatar.src;
-              } else if (recentAvatar.style?.backgroundImage) {
-                const bgImage = recentAvatar.style.backgroundImage;
-                const urlMatch = bgImage.match(/url\\(["']?(.*?)["']?\\)/);
-                if (urlMatch && urlMatch[1]) {
-                  notificationData.contactPhoto = urlMatch[1];
-                }
-              }
-            }
-          } catch (error) {
-            // Log apenas em desenvolvimento
-            if (process.env.NODE_ENV === 'development') {
-              console.log('Erro ao capturar foto do contato:', error);
-            }
-          }
           
           // Enviar dados da notificação para o processo principal
           window.electronAPI.sendNotification(notificationData);
@@ -456,28 +384,8 @@ class MeuZapZap {
       return;
     }
     
-    // Preparar ícone da notificação
-    let notificationIcon = path.join(__dirname, '../assets/icon.png');
-    
-    // Se temos foto do contato, tentar usá-la
-    if (data.contactPhoto) {
-      try {
-        const contactName = data.title || 'unknown';
-        const savedPhotoPath = await this.saveContactPhoto(data.contactPhoto, contactName);
-        if (savedPhotoPath && fs.existsSync(savedPhotoPath)) {
-          notificationIcon = savedPhotoPath;
-          // Log apenas em desenvolvimento
-          if (process.env.NODE_ENV === 'development') {
-            console.log('Usando foto do contato para notificação:', contactName);
-          }
-        }
-      } catch (error) {
-        // Log apenas em desenvolvimento
-        if (process.env.NODE_ENV === 'development') {
-          console.log('Erro ao processar foto do contato:', error);
-        }
-      }
-    }
+    // Ícone padrão da aplicação para notificações
+    const notificationIcon = path.join(__dirname, '../assets/icon.png');
     
     // Limpar título da notificação (remover prefixos do WhatsApp)
     let cleanTitle = data.title || 'WhatsApp';
@@ -495,7 +403,7 @@ class MeuZapZap {
       timeout: 5000,
       sound: true,
       wait: false,
-      subtitle: data.contactPhoto ? 'WhatsApp (com foto)' : 'WhatsApp'
+      subtitle: 'WhatsApp'
     }, (err, response) => {
       // Ao clicar na notificação, mostrar a janela
       if (response === 'activate') {
@@ -508,44 +416,12 @@ class MeuZapZap {
       console.log('Notificação enviada:', {
         title: cleanTitle,
         body: cleanBody,
-        hasContactPhoto: !!data.contactPhoto,
         timestamp: new Date().toLocaleTimeString()
       });
     }
   }
 
-  cleanupContactPhotos() {
-    try {
-      const tempDir = path.join(__dirname, '../temp');
-      if (fs.existsSync(tempDir)) {
-        const files = fs.readdirSync(tempDir);
-        files.forEach(file => {
-          if (file.startsWith('contact-') && file.endsWith('.png')) {
-            const filePath = path.join(tempDir, file);
-            const stats = fs.statSync(filePath);
-            // Remover arquivos com mais de 1 hora
-            if (Date.now() - stats.mtime.getTime() > 3600000) {
-              fs.unlinkSync(filePath);
-              // Log apenas em desenvolvimento
-              if (process.env.NODE_ENV === 'development') {
-                console.log('Foto de contato expirada removida:', file);
-              }
-            }
-          }
-        });
-      }
-    } catch (error) {
-      // Log apenas em desenvolvimento
-      if (process.env.NODE_ENV === 'development') {
-        console.log('Erro na limpeza de fotos de contatos:', error);
-      }
-    }
-  }
-
   init() {
-    // Limpeza inicial de fotos de contatos expiradas
-    this.cleanupContactPhotos();
-    
     // Configurar IPC
     this.setupIPC();
     
