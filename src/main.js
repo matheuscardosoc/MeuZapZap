@@ -588,10 +588,10 @@ class MeuZapZap {
     // Atualizar menu da bandeja com a nova conversa
     this.updateTrayMenu();
     
-    // Enviar notificação simples (clique não funciona no Linux, mas mantemos para compatibilidade)
+    // Enviar notificação simples
     notifier.notify({
       title: cleanTitle,
-      message: `${cleanBody}\n\n💡 Pressione Ctrl+Shift+L para abrir esta conversa`,
+      message: `${cleanBody}\n\n💡 Use Ctrl+Shift+L ou menu da bandeja para abrir a conversa`,
       icon: notificationIcon,
       timeout: 5000,
       sound: true,
@@ -630,7 +630,7 @@ class MeuZapZap {
         });
         
         if (process.env.NODE_ENV === 'development') {
-          console.log('Atalho global Ctrl+Shift+L registrado para abrir última conversa');
+          console.log('Atalho global Ctrl+Shift+L registrado para abrir WhatsApp.');
         }
       } catch (error) {
         if (process.env.NODE_ENV === 'development') {
